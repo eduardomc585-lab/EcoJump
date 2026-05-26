@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doodle Jump - Equilibrado</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.3);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        canvas {
+            background-color: #fff;
+            display: block;
+            max-width: 100%;
+            max-height: 100vh;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            box-shadow: 0 0 20px rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+
+        h1 { margin-top: 0; color: #333; }
+        #final-score { font-size: 24px; font-weight: bold; color: #2979ff; }
+
+        button {
+            padding: 12px 25px;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: #2979ff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div id="game-over">
+            <h1>Fim de Jogo!</h1>
+            <p id="final-score">Pontos: 0</p>
+            <button onclick="resetGame()">Tentar Novamente</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreText = document.getElementById('final-score');
+
+        // AJUSTES DE EQUILÍBRIO (Versão 6.0)
+        let forcaPulo = -20;    // Aumentado de -20 para -24 para pular mais alto
+        let gravidade = 1.2;    // Diminuído de 1.5 para 1.2 para uma queda mais lenta
+        let numPlataformas = 10; // Aumentado de 7 para 10 para ter mais opções de pulo
+        
+        let velocidadeY = 0;
+        let velocidadeX = 0;
+        let alturaTotalPercorrida = 0; 
+        let pontuacao = 0;
+        let jogoAtivo = true;
+        let faseAtual = 1;
+        const alturaSeguranca = 90;
+
+        // Dificuldade Progressiva (Equilibrada)
+        const configFases = {
+            1: { alturaMin: 0, atrito: 0.90, aceleracao: 1.6, gravidade: 1.2 },
+            2: { alturaMin: 1300, atrito: 0.94, aceleracao: 1.4, gravidade: 1.3 },
+            3: { alturaMin: 2600, atrito: 0.98, aceleracao: 1.2, gravidade: 1.4 },
+            4: { alturaMin: 3900, atrito: 1.02, aceleracao: 1.0, gravidade: 1.5 },
+            5: { alturaMin: 5200, atrito: 1.06, aceleracao: 0.8, gravidade: 1.6 }
+        };
+
+        const imgPersonagem = new Image();
+        imgPersonagem.src = 'personagem.png';
+        const imgPlataforma = new Image();
+        imgPlataforma.src = 'plataforma.png';
+        const imgFundo = new Image();
+        imgFundo.src = 'fundo.jpg';
+
+        const alturaRealImagem = 6500;
+        const larguraRealImagem = 320;
+
+        const personagem = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 100,
+            largura: 40,
+            altura: 40
+        };
+
+        let plataformas = [];
+        const larguraPlatFixa = 70;
+
+        function criarPlataformas() {
+            plataformas = [];
+            for (let i = 0; i < numPlataformas; i++) {
+                plataformas.push({
+                    x: Math.random() * (canvas.width - larguraPlatFixa),
+                    y: (canvas.height / numPlataformas) * i,
+                    largura: larguraPlatFixa,
+                    altura: 15
+                });
+            }
+            plataformas[numPlataformas - 1].x = personagem.x - 10;
+            plataformas[numPlataformas - 1].y = personagem.y + 50;
+        }
+
+        const teclas = {};
+        window.addEventListener('keydown', e => teclas[e.code] = true);
+        window.addEventListener('keyup', e => teclas[e.code] = false);
+
+        function atualizarDificuldade() {
+            for (let i = 5; i >= 1; i--) {
+                if (alturaTotalPercorrida >= configFases[i].alturaMin) {
+                    faseAtual = i;
+                    gravidade = configFases[i].gravidade;
+                    break;
+                }
+            }
+        }
+
+        function update() {
+            if (!jogoAtivo) return;
+
+            let config = configFases[faseAtual];
+
+            if (teclas['ArrowLeft']) velocidadeX -= config.aceleracao;
+            else if (teclas['ArrowRight']) velocidadeX += config.aceleracao;
+            
+            velocidadeX *= config.atrito;
+            personagem.x += velocidadeX;
+
+            if (personagem.x + personagem.largura < 0) personagem.x = canvas.width;
+            if (personagem.x > canvas.width) personagem.x = -personagem.largura;
+
+            velocidadeY += gravidade;
+            personagem.y += velocidadeY;
+
+            // Zona de Segurança
+            if (alturaTotalPercorrida < alturaSeguranca && personagem.y + personagem.altura > canvas.height) {
+                personagem.y = canvas.height - personagem.altura;
+                velocidadeY = forcaPulo;
+            }
+
+            if (personagem.y < canvas.height / 2 && velocidadeY < 0) {
+                let deslocamento = Math.abs(velocidadeY);
+                personagem.y = canvas.height / 2;
+                alturaTotalPercorrida += deslocamento;
+                
+                plataformas.forEach(plat => {
+                    plat.y += deslocamento;
+                    if (plat.y > canvas.height) {
+                        plat.y = 0 - Math.random() * 40; // Surge um pouco mais acima para dar fluidez
+                        plat.x = Math.random() * (canvas.width - larguraPlatFixa);
+                        pontuacao += 10;
+                    }
+                });
+                atualizarDificuldade();
+            }
+
+            if (velocidadeY > 0) {
+                plataformas.forEach(plat => {
+                    if (
+                        personagem.x < plat.x + plat.largura &&
+                        personagem.x + personagem.largura > plat.x &&
+                        personagem.y + personagem.altura > plat.y &&
+                        personagem.y + personagem.altura < plat.y + plat.altura + velocidadeY
+                    ) {
+                        velocidadeY = forcaPulo; 
+                    }
+                });
+            }
+
+            if (personagem.y > canvas.height && alturaTotalPercorrida >= alturaSeguranca) {
+                gameOver();
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Fundo
+            try {
+                if (imgFundo.complete && imgFundo.naturalWidth !== 0) {
+                    let sourceY = alturaRealImagem - canvas.height - (alturaTotalPercorrida % (alturaRealImagem - canvas.height));
+                    ctx.drawImage(imgFundo, 0, sourceY, larguraRealImagem, canvas.height, 0, 0, canvas.width, canvas.height);
+                } else {
+                    let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                    gradient.addColorStop(0, "#81d4fa");
+                    gradient.addColorStop(1, "#01579b");
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            } catch(e) {
+                ctx.fillStyle = '#e3f2fd';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // Plataformas
+            plataformas.forEach(plat => {
+                try {
+                    if (imgPlataforma.complete && imgPlataforma.naturalWidth !== 0) {
+                        ctx.drawImage(imgPlataforma, plat.x, plat.y, plat.largura, plat.altura);
+                    } else {
+                        ctx.fillStyle = '#66bb6a';
+                        ctx.fillRect(plat.x, plat.y, plat.largura, plat.altura);
+                    }
+                } catch(e) {
+                    ctx.fillStyle = '#66bb6a';
+                    ctx.fillRect(plat.x, plat.y, plat.largura, plat.altura);
+                }
+            });
+
+            // Personagem
+            try {
+                if (imgPersonagem.complete && imgPersonagem.naturalWidth !== 0) {
+                    ctx.drawImage(imgPersonagem, personagem.x, personagem.y, personagem.largura, personagem.altura);
+                } else {
+                    ctx.fillStyle = '#f44336';
+                    ctx.fillRect(personagem.x, personagem.y, personagem.largura, personagem.altura);
+                }
+            } catch(e) {
+                ctx.fillStyle = '#f44336';
+                ctx.fillRect(personagem.x, personagem.y, personagem.largura, personagem.altura);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            jogoAtivo = false;
+            gameOverScreen.style.display = 'block';
+            finalScoreText.innerText = `Pontuação: ${pontuacao}`;
+        }
+
+        function resetGame() {
+            personagem.x = canvas.width / 2 - 20;
+            personagem.y = canvas.height - 100;
+            velocidadeY = 0;
+            velocidadeX = 0;
+            alturaTotalPercorrida = 0;
+            pontuacao = 0;
+            faseAtual = 1;
+            gravidade = configFases[1].gravidade;
+            jogoAtivo = true;
+            gameOverScreen.style.display = 'none';
+            criarPlataformas();
+        }
+
+        criarPlataformas();
+        gameLoop();
+    </script>
+</body>
+</html>
