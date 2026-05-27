@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EcoJump - Mobile</title>
+    <title>EcoJump - Coleta de Lixo</title>
     <style>
         body {
             margin: 0;
@@ -35,7 +35,7 @@
             height: 100%;
         }
 
-        #start-screen, #game-over {
+        #game-over {
             position: absolute;
             top: 0;
             left: 0;
@@ -47,14 +47,13 @@
             justify-content: center;
             align-items: center;
             text-align: center;
+            display: none;
             z-index: 20;
         }
 
-        #game-over { display: none; }
-
         h1 { color: #2e7d32; margin-bottom: 10px; }
-        p { color: #666; padding: 0 20px; }
         #final-score { font-size: 24px; font-weight: bold; color: #2979ff; margin: 15px 0; }
+        .score-detail { font-size: 18px; color: #666; margin-bottom: 5px; }
 
         .btn {
             padding: 15px 40px;
@@ -66,27 +65,18 @@
             border-radius: 50px;
             font-weight: bold;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            transition: transform 0.2s;
         }
-        .btn:active { transform: scale(0.95); }
     </style>
 </head>
-<body>
+<body onclick="unlockAudio()">
 
     <div id="game-container">
         <canvas id="gameCanvas" width="400" height="600"></canvas>
         
-        <!-- Tela Inicial -->
-        <div id="start-screen">
-            <h1>EcoJump</h1>
-            <p>Incline o celular para mover o personagem!</p>
-            <button class="btn" onclick="startGame()">INICIAR</button>
-        </div>
-
-        <!-- Tela de Game Over -->
         <div id="game-over">
             <h1>Fim de Jogo!</h1>
-            <p id="final-score">Pontos: 0</p>
+            <p id="final-score">Lixos Coletados: 0</p>
+            <p class="score-detail" id="height-score">Altura: 0px</p>
             <button class="btn" onclick="resetGame()">Tentar Novamente</button>
         </div>
     </div>
@@ -94,20 +84,45 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const startScreen = document.getElementById('start-screen');
         const gameOverScreen = document.getElementById('game-over');
         const finalScoreText = document.getElementById('final-score');
+        const heightScoreText = document.getElementById('height-score');
+
+        // Áudio
+        const musicaFundo = new Audio('musica.mp3');
+        musicaFundo.loop = true;
+        let musicaIniciada = false;
+        let audioDesbloqueado = false;
+
+        function unlockAudio() {
+            if (!audioDesbloqueado) {
+                musicaFundo.play().then(() => {
+                    musicaFundo.pause();
+                    audioDesbloqueado = true;
+                }).catch(e => console.log("Aguardando interação..."));
+            }
+        }
+
+        // Imagens
+        const imgPersonagem = new Image();
+        imgPersonagem.src = 'personagem.png';
+        const imgPlataforma = new Image();
+        imgPlataforma.src = 'plataforma1.png';
+        const imgFundo = new Image();
+        imgFundo.src = 'fundo.jpg';
+        const imgLixo = new Image();
+        imgLixo.src = 'lixo.png'; // Sua imagem de lixo coletável
 
         // Configurações
         let forcaPulo = -20;
         let gravidade = 1.2;
         let numPlataformas = 10;
-        let jogoAtivo = false;
+        let jogoAtivo = true;
         
         let velocidadeY = 0;
         let velocidadeX = 0;
         let alturaTotalPercorrida = 0; 
-        let pontuacao = 0;
+        let lixosColetados = 0; // Nova pontuação
         let faseAtual = 1;
         const alturaSeguranca = 90;
 
@@ -118,13 +133,6 @@
             4: { alturaMin: 3900, atrito: 1.02, aceleracao: 1.0, gravidade: 1.5 },
             5: { alturaMin: 5200, atrito: 1.06, aceleracao: 0.8, gravidade: 1.6 }
         };
-
-        const imgPersonagem = new Image();
-        imgPersonagem.src = 'personagem.png';
-        const imgPlataforma = new Image();
-        imgPlataforma.src = 'plataforma1.png';
-        const imgFundo = new Image();
-        imgFundo.src = 'fundo.jpg';
 
         const alturaRealImagem = 6500;
         const larguraRealImagem = 320;
@@ -138,66 +146,53 @@
 
         let plataformas = [];
         const larguraPlatFixa = 70;
+        const alturaPlatFixa = 20;
 
         function criarPlataformas() {
             plataformas = [];
             for (let i = 0; i < numPlataformas; i++) {
+                let platY = (canvas.height / numPlataformas) * i;
+                let temLixo = Math.random() > 0.7; // 30% de chance de ter lixo
+                
                 plataformas.push({
                     x: Math.random() * (canvas.width - larguraPlatFixa),
-                    y: (canvas.height / numPlataformas) * i,
+                    y: platY,
                     largura: larguraPlatFixa,
-                    altura: 15
+                    altura: alturaPlatFixa,
+                    lixo: temLixo ? { coletado: false, largura: 25, altura: 25 } : null
                 });
             }
+            // Plataforma inicial garantida sem lixo
             plataformas[numPlataformas - 1].x = personagem.x - 10;
             plataformas[numPlataformas - 1].y = personagem.y + 50;
+            plataformas[numPlataformas - 1].lixo = null;
         }
 
-        // --- CONTROLES (Teclado + Inclinação) ---
+        // Controles
         const teclas = {};
         window.addEventListener('keydown', e => teclas[e.code] = true);
         window.addEventListener('keyup', e => teclas[e.code] = false);
 
-        function handleOrientation(event) {
+        window.addEventListener('deviceorientation', (event) => {
             if (!jogoAtivo) return;
-            // Gamma é a inclinação esquerda/direita (-90 a 90)
             let tilt = event.gamma; 
             if (tilt !== null) {
-                // Sensibilidade ajustada para mobile
                 let config = configFases[faseAtual];
                 velocidadeX += (tilt * 0.1) * config.aceleracao; 
             }
-        }
+        });
 
-        async function requestDeviceOrientation() {
+        window.addEventListener('touchstart', () => {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                try {
-                    const permissionState = await DeviceOrientationEvent.requestPermission();
-                    if (permissionState === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation);
-                    }
-                } catch (error) {
-                    console.error("Erro ao pedir permissão de orientação:", error);
-                }
-            } else {
-                window.addEventListener('deviceorientation', handleOrientation);
+                DeviceOrientationEvent.requestPermission();
             }
-        }
+        }, { once: true });
 
-        function startGame() {
-            requestDeviceOrientation();
-            startScreen.style.display = 'none';
-            jogoAtivo = true;
-            resetGame();
-        }
-
-        // --- LÓGICA ---
         function update() {
             if (!jogoAtivo) return;
 
             let config = configFases[faseAtual];
 
-            // Teclado (ainda funciona para testes)
             if (teclas['ArrowLeft']) velocidadeX -= config.aceleracao;
             else if (teclas['ArrowRight']) velocidadeX += config.aceleracao;
             
@@ -210,11 +205,14 @@
             velocidadeY += gravidade;
             personagem.y += velocidadeY;
 
+            // Zona de Segurança
             if (alturaTotalPercorrida < alturaSeguranca && personagem.y + personagem.altura > canvas.height) {
                 personagem.y = canvas.height - personagem.altura;
                 velocidadeY = forcaPulo;
+                if (!musicaIniciada && audioDesbloqueado) { musicaFundo.play(); musicaIniciada = true; }
             }
 
+            // Movimento da Câmera
             if (personagem.y < canvas.height / 2 && velocidadeY < 0) {
                 let deslocamento = Math.abs(velocidadeY);
                 personagem.y = canvas.height / 2;
@@ -225,11 +223,11 @@
                     if (plat.y > canvas.height) {
                         plat.y = 0 - Math.random() * 40;
                         plat.x = Math.random() * (canvas.width - larguraPlatFixa);
-                        pontuacao += 10;
+                        // Novo lixo na plataforma reciclada
+                        plat.lixo = Math.random() > 0.7 ? { coletado: false, largura: 25, altura: 25 } : null;
                     }
                 });
                 
-                // Atualizar Dificuldade
                 for (let i = 5; i >= 1; i--) {
                     if (alturaTotalPercorrida >= configFases[i].alturaMin) {
                         faseAtual = i;
@@ -239,18 +237,35 @@
                 }
             }
 
-            if (velocidadeY > 0) {
-                plataformas.forEach(plat => {
+            // Colisão com Plataformas e Lixos
+            plataformas.forEach(plat => {
+                // Pulo na plataforma
+                if (velocidadeY > 0 &&
+                    personagem.x < plat.x + plat.largura &&
+                    personagem.x + personagem.largura > plat.x &&
+                    personagem.y + personagem.altura > plat.y &&
+                    personagem.y + personagem.altura < plat.y + plat.altura + velocidadeY
+                ) {
+                    velocidadeY = forcaPulo; 
+                    if (!musicaIniciada && audioDesbloqueado) { musicaFundo.play(); musicaIniciada = true; }
+                }
+
+                // Coleta de Lixo
+                if (plat.lixo && !plat.lixo.coletado) {
+                    let lixoX = plat.x + (plat.largura / 2) - (plat.lixo.largura / 2);
+                    let lixoY = plat.y - plat.lixo.altura;
+
                     if (
-                        personagem.x < plat.x + plat.largura &&
-                        personagem.x + personagem.largura > plat.x &&
-                        personagem.y + personagem.altura > plat.y &&
-                        personagem.y + personagem.altura < plat.y + plat.altura + velocidadeY
+                        personagem.x < lixoX + plat.lixo.largura &&
+                        personagem.x + personagem.largura > lixoX &&
+                        personagem.y < lixoY + plat.lixo.altura &&
+                        personagem.y + personagem.altura > lixoY
                     ) {
-                        velocidadeY = forcaPulo; 
+                        plat.lixo.coletado = true;
+                        lixosColetados++;
                     }
-                });
-            }
+                }
+            });
 
             if (personagem.y > canvas.height && alturaTotalPercorrida >= alturaSeguranca) {
                 gameOver();
@@ -259,7 +274,7 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+            
             // Fundo
             try {
                 if (imgFundo.complete && imgFundo.naturalWidth !== 0) {
@@ -269,12 +284,9 @@
                     ctx.fillStyle = '#e3f2fd';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
-            } catch(e) {
-                ctx.fillStyle = '#e3f2fd';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
+            } catch(e) {}
 
-            // Plataformas
+            // Plataformas e Lixos
             plataformas.forEach(plat => {
                 try {
                     if (imgPlataforma.complete && imgPlataforma.naturalWidth !== 0) {
@@ -283,10 +295,19 @@
                         ctx.fillStyle = '#66bb6a';
                         ctx.fillRect(plat.x, plat.y, plat.largura, plat.altura);
                     }
-                } catch(e) {
-                    ctx.fillStyle = '#66bb6a';
-                    ctx.fillRect(plat.x, plat.y, plat.largura, plat.altura);
-                }
+
+                    // Desenhar Lixo
+                    if (plat.lixo && !plat.lixo.coletado) {
+                        let lixoX = plat.x + (plat.largura / 2) - (plat.lixo.largura / 2);
+                        let lixoY = plat.y - plat.lixo.altura;
+                        if (imgLixo.complete && imgLixo.naturalWidth !== 0) {
+                            ctx.drawImage(imgLixo, lixoX, lixoY, plat.lixo.largura, plat.lixo.altura);
+                        } else {
+                            ctx.fillStyle = '#ffeb3b';
+                            ctx.fillRect(lixoX, lixoY, plat.lixo.largura, plat.lixo.altura);
+                        }
+                    }
+                } catch(e) {}
             });
 
             // Personagem
@@ -297,10 +318,7 @@
                     ctx.fillStyle = '#f44336';
                     ctx.fillRect(personagem.x, personagem.y, personagem.largura, personagem.altura);
                 }
-            } catch(e) {
-                ctx.fillStyle = '#f44336';
-                ctx.fillRect(personagem.x, personagem.y, personagem.largura, personagem.altura);
-            }
+            } catch(e) {}
         }
 
         function gameLoop() {
@@ -312,7 +330,11 @@
         function gameOver() {
             jogoAtivo = false;
             gameOverScreen.style.display = 'flex';
-            finalScoreText.innerText = `Pontuação: ${pontuacao}`;
+            finalScoreText.innerText = `Lixos Coletados: ${lixosColetados}`;
+            heightScoreText.innerText = `Altura Alcançada: ${Math.floor(alturaTotalPercorrida)}px`;
+            musicaFundo.pause();
+            musicaFundo.currentTime = 0;
+            musicaIniciada = false;
         }
 
         function resetGame() {
@@ -321,7 +343,7 @@
             velocidadeY = 0;
             velocidadeX = 0;
             alturaTotalPercorrida = 0;
-            pontuacao = 0;
+            lixosColetados = 0;
             faseAtual = 1;
             gravidade = configFases[1].gravidade;
             jogoAtivo = true;
