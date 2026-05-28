@@ -2,9 +2,14 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EcoJump - Coleta de Lixo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>EcoJump - Fullscreen</title>
     <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         body {
             margin: 0;
             padding: 0;
@@ -12,7 +17,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: #f0f0f0;
+            background-color: #000; /* Fundo preto para as bordas se houver */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
             touch-action: none;
@@ -20,12 +25,9 @@
 
         #game-container {
             position: relative;
-            box-shadow: 0 0 30px rgba(0,0,0,0.3);
-            background-color: #fff;
             width: 100vw;
             height: 100vh;
-            max-width: 400px;
-            max-height: 600px;
+            background-color: #fff;
             overflow: hidden;
         }
 
@@ -33,6 +35,7 @@
             display: block;
             width: 100%;
             height: 100%;
+            object-fit: cover; /* Garante que o canvas preencha o container */
         }
 
         #game-over {
@@ -51,27 +54,28 @@
             z-index: 20;
         }
 
-        h1 { color: #2e7d32; margin-bottom: 10px; }
-        #final-score { font-size: 24px; font-weight: bold; color: #2979ff; margin: 15px 0; }
+        h1 { color: #2e7d32; margin-bottom: 10px; font-size: 32px; }
+        #final-score { font-size: 28px; font-weight: bold; color: #2979ff; margin: 15px 0; }
         .score-detail { font-size: 18px; color: #666; margin-bottom: 5px; }
 
         .btn {
-            padding: 15px 40px;
-            font-size: 20px;
+            padding: 18px 50px;
+            font-size: 22px;
             cursor: pointer;
             background-color: #4caf50;
             color: white;
             border: none;
             border-radius: 50px;
             font-weight: bold;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            margin-top: 20px;
         }
     </style>
 </head>
 <body onclick="unlockAudio()">
 
     <div id="game-container">
-        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <canvas id="gameCanvas"></canvas>
         
         <div id="game-over">
             <h1>Fim de Jogo!</h1>
@@ -87,6 +91,14 @@
         const gameOverScreen = document.getElementById('game-over');
         const finalScoreText = document.getElementById('final-score');
         const heightScoreText = document.getElementById('height-score');
+
+        // Ajuste dinâmico do Canvas para o tamanho da tela
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         // Áudio
         const musicaFundo = new Audio('musica.mp3');
@@ -111,61 +123,64 @@
         const imgFundo = new Image();
         imgFundo.src = 'fundo.jpg';
         const imgLixo = new Image();
-        imgLixo.src = 'lixo.png'; // Sua imagem de lixo coletável
+        imgLixo.src = 'lixo.png';
 
-        // Configurações
-        let forcaPulo = -20;
-        let gravidade = 1.2;
-        let numPlataformas = 10;
+        // Configurações (Ajustadas para escala dinâmica)
+        let forcaPulo = -22; // Levemente aumentado para telas mais altas
+        let gravidade = 1.1; // Levemente diminuído para suavidade
+        let numPlataformas = 12; // Mais plataformas para telas compridas
         let jogoAtivo = true;
         
         let velocidadeY = 0;
         let velocidadeX = 0;
         let alturaTotalPercorrida = 0; 
-        let lixosColetados = 0; // Nova pontuação
+        let lixosColetados = 0;
         let faseAtual = 1;
         const alturaSeguranca = 90;
 
         const configFases = {
-            1: { alturaMin: 0, atrito: 0.90, aceleracao: 1.6, gravidade: 1.2 },
-            2: { alturaMin: 1300, atrito: 0.94, aceleracao: 1.4, gravidade: 1.3 },
-            3: { alturaMin: 2600, atrito: 0.98, aceleracao: 1.2, gravidade: 1.4 },
-            4: { alturaMin: 3900, atrito: 1.02, aceleracao: 1.0, gravidade: 1.5 },
-            5: { alturaMin: 5200, atrito: 1.06, aceleracao: 0.8, gravidade: 1.6 }
+            1: { alturaMin: 0, atrito: 0.90, aceleracao: 1.6, gravidade: 1.1 },
+            2: { alturaMin: 1300, atrito: 0.94, aceleracao: 1.4, gravidade: 1.2 },
+            3: { alturaMin: 2600, atrito: 0.98, aceleracao: 1.2, gravidade: 1.3 },
+            4: { alturaMin: 3900, atrito: 1.02, aceleracao: 1.0, gravidade: 1.4 },
+            5: { alturaMin: 5200, atrito: 1.06, aceleracao: 0.8, gravidade: 1.5 }
         };
 
         const alturaRealImagem = 6500;
         const larguraRealImagem = 320;
 
         const personagem = {
-            x: canvas.width / 2 - 20,
-            y: canvas.height - 100,
-            largura: 40,
-            altura: 40
+            x: 0, // Definido no resetGame
+            y: 0, // Definido no resetGame
+            largura: 45,
+            altura: 45
         };
 
         let plataformas = [];
-        const larguraPlatFixa = 70;
+        const larguraPlatFixa = 80;
         const alturaPlatFixa = 20;
 
         function criarPlataformas() {
             plataformas = [];
             for (let i = 0; i < numPlataformas; i++) {
                 let platY = (canvas.height / numPlataformas) * i;
-                let temLixo = Math.random() > 0.7; // 30% de chance de ter lixo
+                let temLixo = Math.random() > 0.7;
                 
                 plataformas.push({
                     x: Math.random() * (canvas.width - larguraPlatFixa),
                     y: platY,
                     largura: larguraPlatFixa,
                     altura: alturaPlatFixa,
-                    lixo: temLixo ? { coletado: false, largura: 25, altura: 25 } : null
+                    lixo: temLixo ? { coletado: false, largura: 30, altura: 30 } : null
                 });
             }
-            // Plataforma inicial garantida sem lixo
-            plataformas[numPlataformas - 1].x = personagem.x - 10;
-            plataformas[numPlataformas - 1].y = personagem.y + 50;
+            // Plataforma inicial garantida
+            plataformas[numPlataformas - 1].x = canvas.width / 2 - larguraPlatFixa / 2;
+            plataformas[numPlataformas - 1].y = canvas.height - 80;
             plataformas[numPlataformas - 1].lixo = null;
+            
+            personagem.x = plataformas[numPlataformas - 1].x + (larguraPlatFixa/2) - (personagem.largura/2);
+            personagem.y = plataformas[numPlataformas - 1].y - personagem.altura;
         }
 
         // Controles
@@ -178,7 +193,7 @@
             let tilt = event.gamma; 
             if (tilt !== null) {
                 let config = configFases[faseAtual];
-                velocidadeX += (tilt * 0.1) * config.aceleracao; 
+                velocidadeX += (tilt * 0.12) * config.aceleracao; 
             }
         });
 
@@ -199,6 +214,7 @@
             velocidadeX *= config.atrito;
             personagem.x += velocidadeX;
 
+            // Loop lateral infinito
             if (personagem.x + personagem.largura < 0) personagem.x = canvas.width;
             if (personagem.x > canvas.width) personagem.x = -personagem.largura;
 
@@ -221,10 +237,9 @@
                 plataformas.forEach(plat => {
                     plat.y += deslocamento;
                     if (plat.y > canvas.height) {
-                        plat.y = 0 - Math.random() * 40;
+                        plat.y = 0 - Math.random() * 50;
                         plat.x = Math.random() * (canvas.width - larguraPlatFixa);
-                        // Novo lixo na plataforma reciclada
-                        plat.lixo = Math.random() > 0.7 ? { coletado: false, largura: 25, altura: 25 } : null;
+                        plat.lixo = Math.random() > 0.7 ? { coletado: false, largura: 30, altura: 30 } : null;
                     }
                 });
                 
@@ -237,9 +252,8 @@
                 }
             }
 
-            // Colisão com Plataformas e Lixos
+            // Colisão
             plataformas.forEach(plat => {
-                // Pulo na plataforma
                 if (velocidadeY > 0 &&
                     personagem.x < plat.x + plat.largura &&
                     personagem.x + personagem.largura > plat.x &&
@@ -250,11 +264,9 @@
                     if (!musicaIniciada && audioDesbloqueado) { musicaFundo.play(); musicaIniciada = true; }
                 }
 
-                // Coleta de Lixo
                 if (plat.lixo && !plat.lixo.coletado) {
                     let lixoX = plat.x + (plat.largura / 2) - (plat.lixo.largura / 2);
                     let lixoY = plat.y - plat.lixo.altura;
-
                     if (
                         personagem.x < lixoX + plat.lixo.largura &&
                         personagem.x + personagem.largura > lixoX &&
@@ -275,10 +287,11 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Fundo
+            // Fundo (Preenchendo a tela inteira)
             try {
                 if (imgFundo.complete && imgFundo.naturalWidth !== 0) {
                     let sourceY = alturaRealImagem - canvas.height - (alturaTotalPercorrida % (alturaRealImagem - canvas.height));
+                    // Usamos canvas.width e canvas.height para preencher tudo
                     ctx.drawImage(imgFundo, 0, sourceY, larguraRealImagem, canvas.height, 0, 0, canvas.width, canvas.height);
                 } else {
                     ctx.fillStyle = '#e3f2fd';
@@ -296,7 +309,6 @@
                         ctx.fillRect(plat.x, plat.y, plat.largura, plat.altura);
                     }
 
-                    // Desenhar Lixo
                     if (plat.lixo && !plat.lixo.coletado) {
                         let lixoX = plat.x + (plat.largura / 2) - (plat.lixo.largura / 2);
                         let lixoY = plat.y - plat.lixo.altura;
@@ -338,14 +350,11 @@
         }
 
         function resetGame() {
-            personagem.x = canvas.width / 2 - 20;
-            personagem.y = canvas.height - 100;
-            velocidadeY = 0;
-            velocidadeX = 0;
             alturaTotalPercorrida = 0;
             lixosColetados = 0;
             faseAtual = 1;
-            gravidade = configFases[1].gravidade;
+            velocidadeY = 0;
+            velocidadeX = 0;
             jogoAtivo = true;
             gameOverScreen.style.display = 'none';
             criarPlataformas();
