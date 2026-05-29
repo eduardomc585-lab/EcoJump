@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>EcoJump - Versão 77.7777.7 Final</title>
+    <title>EcoJump - Versão 77.7777.7 Mobile Fix</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -112,7 +112,7 @@
 
         const alturaRealImagemFundo = 8000;
 
-        // --- FÍSICA E TAMANHOS ORIGINAIS (REVERTIDOS) ---
+        // --- FÍSICA E TAMANHOS ---
         let forcaPulo = -22;
         let gravidade = 1.1;
         let numPlataformas = 12;
@@ -201,7 +201,12 @@
             if (personagem.y < canvas.height / 2 && velocidadeY < 0) {
                 let deslocamento = Math.abs(velocidadeY);
                 personagem.y = canvas.height / 2;
-                alturaTotalPercorrida += deslocamento;
+
+                // --- FIX: NORMALIZAÇÃO DE ALTURA ---
+                // Dividimos o deslocamento por um fator (ex: 2.5) para que subir no celular
+                // não mude de fase tão rápido quanto antes. Isso simula uma tela menor.
+                let fatorEscalaMobile = 2.5; 
+                alturaTotalPercorrida += deslocamento / fatorEscalaMobile;
                 
                 plataformas.forEach(plat => {
                     plat.y += deslocamento;
@@ -254,13 +259,14 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // FUNDO RESPONSIVO NA LARGURA (Preenche 100% da tela)
             try {
                 if (imgFundo.complete && imgFundo.naturalWidth !== 0) {
-                    // Calcula proporção baseada na largura da tela e da imagem
                     let proporcao = imgFundo.naturalWidth / canvas.width;
                     let alturaRecorte = canvas.height * proporcao;
-                    let sourceY = alturaRealImagemFundo - alturaRecorte - (alturaTotalPercorrida % (alturaRealImagemFundo - alturaRecorte));
+                    
+                    // O fundo deve acompanhar a altura percorrida NORMALIZADA para bater com as fases
+                    // Multiplicamos por 2.5 (o mesmo fator) para o visual bater com a lógica
+                    let sourceY = alturaRealImagemFundo - alturaRecorte - ((alturaTotalPercorrida * 2.5) % (alturaRealImagemFundo - alturaRecorte));
                     
                     ctx.drawImage(imgFundo, 0, sourceY, imgFundo.naturalWidth, alturaRecorte, 0, 0, canvas.width, canvas.height);
                 } else {
@@ -268,7 +274,6 @@
                 }
             } catch(e) {}
 
-            // OBJETOS COM TAMANHOS FIXOS ORIGINAIS
             plataformas.forEach(plat => {
                 try {
                     let imgP = imagensPlataformas[plat.fase];
