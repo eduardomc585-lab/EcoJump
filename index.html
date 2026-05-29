@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>EcoJump - Versão 77.7777.7</title>
+    <title>EcoJump - Versão 77.7777.7 Final</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -11,7 +11,7 @@
             height: 100vh; background-color: #000; font-family: 'Segoe UI', sans-serif;
             overflow: hidden; touch-action: none;
         }
-        #game-container { position: relative; width: 100vw; height: 100vh; background-color: #fff; overflow: hidden; }
+        #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
         canvas { display: block; width: 100%; height: 100%; }
         
         #game-over {
@@ -21,11 +21,11 @@
             padding: 20px;
         }
 
-        #logo-img { max-width: 200px; margin-bottom: 20px; }
+        #logo-img { max-width: 180px; margin-bottom: 20px; }
         h1 { color: #2e7d32; margin-bottom: 5px; font-size: 28px; }
         #final-score { font-size: 24px; font-weight: bold; color: #2979ff; margin: 10px 0; }
         #fase-info { font-size: 20px; color: #2e7d32; font-weight: bold; margin-bottom: 10px; }
-        #fase-frase { font-size: 18px; font-style: italic; color: #555; max-width: 80%; line-height: 1.4; margin-bottom: 25px; }
+        #fase-frase { font-size: 18px; font-style: italic; color: #555; max-width: 85%; line-height: 1.4; margin-bottom: 25px; }
 
         .btn {
             padding: 18px 50px; font-size: 22px; cursor: pointer; background-color: #4caf50;
@@ -41,7 +41,7 @@
         <div id="game-over">
             <img src="logo.png" id="logo-img" alt="EcoJump Logo">
             <h1>Fim de Jogo!</h1>
-            <p id="final-score">Lixos Coletados: 0</p>
+            <p id="final-score">Coletas: 0</p>
             <div id="fase-info">Fase Alcançada: 1</div>
             <p id="fase-frase">"Cada lixo jogado no chão é uma ferida no planeta"</p>
             <button class="btn" onclick="resetGame()">Tentar Novamente</button>
@@ -63,7 +63,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- SISTEMA DE ÁUDIO ---
+        // --- ÁUDIO ---
         const musicaFundo = new Audio('musica.mp3');
         musicaFundo.loop = true;
         let musicaIniciada = false;
@@ -76,19 +76,16 @@
             }
         }
 
-        // --- CARREGAMENTO DE IMAGENS ---
-        const imgPersonagem = new Image(); imgPersonagem.src = 'lixeiro.png'; // Nome atualizado
-        const imgFundo = new Image(); imgFundo.src = 'FundoPrincipal.jpg'; // Nome atualizado
+        // --- IMAGENS ---
+        const imgPersonagem = new Image(); imgPersonagem.src = 'lixeiro.png';
+        const imgFundo = new Image(); imgFundo.src = 'FundoPrincipal.jpg';
         
         const imagensPlataformas = [];
-        const imagensColetaveis = {}; // Armazenará os 25 itens: imagensColetaveis["1_1"], etc.
+        const imagensColetaveis = {};
 
         for (let i = 1; i <= 5; i++) {
-            // Plataformas
             const p = new Image(); p.src = `plataforma${i}.png`; 
             imagensPlataformas[i] = p;
-
-            // Coletáveis (5 por fase)
             for (let j = 1; j <= 5; j++) {
                 const img = new Image();
                 let prefixo = (i === 5) ? "limpo" : "lixo";
@@ -97,7 +94,6 @@
             }
         }
 
-        // --- FRASES POR FASE ---
         const frasesPorFase = {
             1: "Cada lixo jogado no chão é uma ferida no planeta",
             2: "A fumaça das fábricas escurece o céu e ameaça a vida",
@@ -114,9 +110,9 @@
             5: { alturaMax: 8000, atrito: 1.06, aceleracao: 0.8, gravidade: 1.5 }
         };
 
-        const alturaRealImagem = 8000;
-        const larguraRealImagem = 1080;
+        const alturaRealImagemFundo = 8000;
 
+        // --- FÍSICA E TAMANHOS ORIGINAIS (REVERTIDOS) ---
         let forcaPulo = -22;
         let gravidade = 1.1;
         let numPlataformas = 12;
@@ -131,20 +127,20 @@
 
         const personagem = { x: 0, y: 0, largura: 45, altura: 45 };
         let plataformas = [];
-        const larguraPlatFixa = 80;
-        const alturaPlatFixa = 20;
+        const larguraPlatOriginal = 80;
+        const alturaPlatOriginal = 20;
 
         function criarPlataformas() {
             plataformas = [];
             for (let i = 0; i < numPlataformas; i++) {
                 let platY = (canvas.height / numPlataformas) * i;
-                let idItem = Math.floor(Math.random() * 5) + 1; // Sorteia entre 1 e 5
+                let idItem = Math.floor(Math.random() * 5) + 1;
                 
                 plataformas.push({
-                    x: Math.random() * (canvas.width - larguraPlatFixa),
+                    x: Math.random() * (canvas.width - larguraPlatOriginal),
                     y: platY,
-                    largura: larguraPlatFixa,
-                    altura: alturaPlatFixa,
+                    largura: larguraPlatOriginal,
+                    altura: alturaPlatOriginal,
                     fase: 1,
                     lixo: Math.random() > 0.7 ? { 
                         coletado: false, largura: 30, altura: 30, 
@@ -152,14 +148,14 @@
                     } : null
                 });
             }
-            plataformas[numPlataformas - 1].x = canvas.width / 2 - larguraPlatFixa / 2;
+            plataformas[numPlataformas - 1].x = canvas.width / 2 - (larguraPlatOriginal / 2);
             plataformas[numPlataformas - 1].y = canvas.height - 80;
             plataformas[numPlataformas - 1].lixo = null;
-            personagem.x = plataformas[numPlataformas - 1].x + (larguraPlatFixa/2) - (personagem.largura/2);
+            
+            personagem.x = plataformas[numPlataformas - 1].x + (larguraPlatOriginal/2) - (personagem.largura/2);
             personagem.y = plataformas[numPlataformas - 1].y - personagem.altura;
         }
 
-        // --- CONTROLES ---
         const teclas = {};
         window.addEventListener('keydown', e => teclas[e.code] = true);
         window.addEventListener('keyup', e => teclas[e.code] = false);
@@ -179,7 +175,6 @@
             }
         }, { once: true });
 
-        // --- LÓGICA DO JOGO ---
         function update() {
             if (!jogoAtivo) return;
 
@@ -212,9 +207,8 @@
                     plat.y += deslocamento;
                     if (plat.y > canvas.height) {
                         plat.y = 0 - Math.random() * 50;
-                        plat.x = Math.random() * (canvas.width - larguraPlatFixa);
+                        plat.x = Math.random() * (canvas.width - plat.largura);
                         plat.fase = faseAtual;
-                        
                         let idItemSorteado = Math.floor(Math.random() * 5) + 1;
                         plat.lixo = Math.random() > 0.7 ? { 
                             coletado: false, largura: 30, altura: 30, 
@@ -260,17 +254,21 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // FUNDO RESPONSIVO NA LARGURA (Preenche 100% da tela)
             try {
                 if (imgFundo.complete && imgFundo.naturalWidth !== 0) {
-                    let proporcao = larguraRealImagem / canvas.width;
+                    // Calcula proporção baseada na largura da tela e da imagem
+                    let proporcao = imgFundo.naturalWidth / canvas.width;
                     let alturaRecorte = canvas.height * proporcao;
-                    let sourceY = alturaRealImagem - alturaRecorte - (alturaTotalPercorrida % (alturaRealImagem - alturaRecorte));
-                    ctx.drawImage(imgFundo, 0, sourceY, larguraRealImagem, alturaRecorte, 0, 0, canvas.width, canvas.height);
+                    let sourceY = alturaRealImagemFundo - alturaRecorte - (alturaTotalPercorrida % (alturaRealImagemFundo - alturaRecorte));
+                    
+                    ctx.drawImage(imgFundo, 0, sourceY, imgFundo.naturalWidth, alturaRecorte, 0, 0, canvas.width, canvas.height);
                 } else {
                     ctx.fillStyle = '#e3f2fd'; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
             } catch(e) {}
 
+            // OBJETOS COM TAMANHOS FIXOS ORIGINAIS
             plataformas.forEach(plat => {
                 try {
                     let imgP = imagensPlataformas[plat.fase];
@@ -308,7 +306,7 @@
         function gameOver() {
             jogoAtivo = false;
             gameOverScreen.style.display = 'flex';
-            finalScoreText.innerText = `Coletas Realizadas: ${lixosColetados}`;
+            finalScoreText.innerText = `Coletas: ${lixosColetados}`;
             faseInfoText.innerText = `Fase Alcançada: ${faseAtual}`;
             faseFraseText.innerText = `"${frasesPorFase[faseAtual]}"`;
             musicaFundo.pause(); musicaFundo.currentTime = 0; musicaIniciada = false;
