@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>EcoJump - Versão 77.7777.7</title>
+    <title>EcoJump - Versão 77.7777.7 Final Fix</title>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -77,18 +77,15 @@
         }
 
         // --- CARREGAMENTO DE IMAGENS ---
-        const imgPersonagem = new Image(); imgPersonagem.src = 'lixeiro.png'; // Nome atualizado
-        const imgFundo = new Image(); imgFundo.src = 'FundoPrincipal.jpg'; // Nome atualizado
+        const imgPersonagem = new Image(); imgPersonagem.src = 'lixeiro.png';
+        const imgFundo = new Image(); imgFundo.src = 'FundoPrincipal.jpg';
         
         const imagensPlataformas = [];
-        const imagensColetaveis = {}; // Armazenará os 25 itens: imagensColetaveis["1_1"], etc.
+        const imagensColetaveis = {};
 
         for (let i = 1; i <= 5; i++) {
-            // Plataformas
             const p = new Image(); p.src = `plataforma${i}.png`; 
             imagensPlataformas[i] = p;
-
-            // Coletáveis (5 por fase)
             for (let j = 1; j <= 5; j++) {
                 const img = new Image();
                 let prefixo = (i === 5) ? "limpo" : "lixo";
@@ -97,7 +94,6 @@
             }
         }
 
-        // --- FRASES POR FASE ---
         const frasesPorFase = {
             1: "Cada lixo jogado no chão é uma ferida no planeta",
             2: "A fumaça das fábricas escurece o céu e ameaça a vida",
@@ -117,6 +113,7 @@
         const alturaRealImagem = 8000;
         const larguraRealImagem = 1080;
 
+        // --- CONFIGURAÇÃO DE FÍSICA ---
         let forcaPulo = -22;
         let gravidade = 1.1;
         let numPlataformas = 12;
@@ -138,7 +135,7 @@
             plataformas = [];
             for (let i = 0; i < numPlataformas; i++) {
                 let platY = (canvas.height / numPlataformas) * i;
-                let idItem = Math.floor(Math.random() * 5) + 1; // Sorteia entre 1 e 5
+                let idItem = Math.floor(Math.random() * 5) + 1;
                 
                 plataformas.push({
                     x: Math.random() * (canvas.width - larguraPlatFixa),
@@ -159,7 +156,6 @@
             personagem.y = plataformas[numPlataformas - 1].y - personagem.altura;
         }
 
-        // --- CONTROLES ---
         const teclas = {};
         window.addEventListener('keydown', e => teclas[e.code] = true);
         window.addEventListener('keyup', e => teclas[e.code] = false);
@@ -179,7 +175,6 @@
             }
         }, { once: true });
 
-        // --- LÓGICA DO JOGO ---
         function update() {
             if (!jogoAtivo) return;
 
@@ -206,7 +201,12 @@
             if (personagem.y < canvas.height / 2 && velocidadeY < 0) {
                 let deslocamento = Math.abs(velocidadeY);
                 personagem.y = canvas.height / 2;
-                alturaTotalPercorrida += deslocamento;
+
+                // --- CORREÇÃO DE PROGRESSÃO MOBILE ---
+                // Normalizamos o progresso baseado em uma altura padrão de 600px
+                // Isso impede que telas de alta resolução (2400px+) passem de fase rápido demais.
+                let fatorEscala = 600 / canvas.height;
+                alturaTotalPercorrida += deslocamento * fatorEscala;
                 
                 plataformas.forEach(plat => {
                     plat.y += deslocamento;
@@ -214,7 +214,6 @@
                         plat.y = 0 - Math.random() * 50;
                         plat.x = Math.random() * (canvas.width - larguraPlatFixa);
                         plat.fase = faseAtual;
-                        
                         let idItemSorteado = Math.floor(Math.random() * 5) + 1;
                         plat.lixo = Math.random() > 0.7 ? { 
                             coletado: false, largura: 30, altura: 30, 
@@ -260,12 +259,20 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // --- RENDERIZAÇÃO DO FUNDO CORRIGIDA ---
             try {
                 if (imgFundo.complete && imgFundo.naturalWidth !== 0) {
-                    let proporcao = larguraRealImagem / canvas.width;
-                    let alturaRecorte = canvas.height * proporcao;
-                    let sourceY = alturaRealImagem - alturaRecorte - (alturaTotalPercorrida % (alturaRealImagem - alturaRecorte));
-                    ctx.drawImage(imgFundo, 0, sourceY, larguraRealImagem, alturaRecorte, 0, 0, canvas.width, canvas.height);
+                    // Calculamos quanto da imagem original (1080px) deve ser cortado para preencher a tela atual
+                    let proporcaoCorte = larguraRealImagem / canvas.width;
+                    let alturaCorte = canvas.height * proporcaoCorte;
+                    
+                    // O scroll deve ser linear baseado na altura percorrida (normalizada)
+                    // Multiplicamos por (1 / fatorEscala) para o visual bater com a física
+                    let fatorEscala = 600 / canvas.height;
+                    let scrollVisual = alturaTotalPercorrida / fatorEscala;
+                    let sourceY = alturaRealImagem - alturaCorte - (scrollVisual % (alturaRealImagem - alturaCorte));
+                    
+                    ctx.drawImage(imgFundo, 0, sourceY, larguraRealImagem, alturaCorte, 0, 0, canvas.width, canvas.height);
                 } else {
                     ctx.fillStyle = '#e3f2fd'; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
@@ -308,7 +315,7 @@
         function gameOver() {
             jogoAtivo = false;
             gameOverScreen.style.display = 'flex';
-            finalScoreText.innerText = `Coletas Realizadas: ${lixosColetados}`;
+            finalScoreText.innerText = `Lixos Coletados: ${lixosColetados}`;
             faseInfoText.innerText = `Fase Alcançada: ${faseAtual}`;
             faseFraseText.innerText = `"${frasesPorFase[faseAtual]}"`;
             musicaFundo.pause(); musicaFundo.currentTime = 0; musicaIniciada = false;
